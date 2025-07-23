@@ -10,15 +10,7 @@
 #include <plist/plist.h>
 #include <png.h>
 
-struct artwork_header {
-	unsigned int idk1;
-	unsigned int plist_offset;
-	unsigned int width;
-	unsigned int height;
-	unsigned int unk1;
-	unsigned int total;
-	unsigned int signature;
-};
+#include "artwork.h"
 
 void unartwork_print_help(FILE *f, const char *self) {
 	fprintf(f,"%s unartwork [options...] [-i|--artwork] <artwork file> [-D|--output-directory] <output directory>\n\
@@ -31,6 +23,8 @@ void unartwork_print_help(FILE *f, const char *self) {
 }
 
 int unartwork_main(int argc, char *argv[]) {
+	argc--;
+	const char *self_name=*(argv++);
 	int raw_output=0;
 	const char *artwork_fn=NULL;
 	const char *output_dir=NULL;
@@ -53,16 +47,16 @@ int unartwork_main(int argc, char *argv[]) {
 		switch(c) {
 		case 0:
 			if(index==0) {
-				unartwork_print_help(stdout,*argv);
+				unartwork_print_help(stdout,self_name);
 				return 0;
 			}else if(index==1) {
 				raw_output=1;
 				break;
 			}else if(index==2) {
 				artwork_scale=atoi(optarg);
-				if(artwork_scale<1||artwork_scale>9) {
+				if(artwork_scale<1||artwork_scale>64) {
 					fprintf(stderr,"ERROR: --force-scale: Invalid artwork scale.\n");
-					unartwork_print_help(stderr,*argv);
+					unartwork_print_help(stderr,self_name);
 					return 1;
 				}
 				break;
@@ -73,7 +67,7 @@ int unartwork_main(int argc, char *argv[]) {
 		case 'i':
 			if(artwork_fn) {
 				fprintf(stderr,"ERROR: Duplicated -i: %s and %s.\n",artwork_fn,optarg);
-				unartwork_print_help(stderr,*argv);
+				unartwork_print_help(stderr,self_name);
 				return 1;
 			}
 			artwork_fn=optarg;
@@ -81,11 +75,14 @@ int unartwork_main(int argc, char *argv[]) {
 		case 'D':
 			if(output_dir) {
 				fprintf(stderr,"ERROR: Duplicated -D: %s and %s.\n",output_dir,optarg);
-				unartwork_print_help(stderr,*argv);
+				unartwork_print_help(stderr,self_name);
 				return 1;
 			}
 			output_dir=optarg;
 			break;
+		case '?':
+			unartwork_print_help(stderr,self_name);
+			return 1;
 		}	
 	}
 	while(optind<argc) {
@@ -95,19 +92,19 @@ int unartwork_main(int argc, char *argv[]) {
 			output_dir=argv[optind];
 		}else{
 			fprintf(stderr,"ERROR: Unrecognized argument: %s\n",argv[optind]);
-			unartwork_print_help(stderr,*argv);
+			unartwork_print_help(stderr,self_name);
 			return 1;
 		}
 		optind++;
 	}
 	if(!artwork_fn||(!list_only&&!output_dir)) {
 		fprintf(stderr,"ERROR: Too few arguments\n");
-		unartwork_print_help(stderr,*argv);
+		unartwork_print_help(stderr,self_name);
 		return 1;
 	}
 	if(list_only&&output_dir) {
 		fprintf(stderr,"ERROR: Conflicting arguments: --list and --output-directory\n");
-		unartwork_print_help(stderr,*argv);
+		unartwork_print_help(stderr,self_name);
 		return 1;
 	}
 	if(output_dir) {
@@ -163,8 +160,8 @@ int unartwork_main(int argc, char *argv[]) {
 		munmap(artwork_file,aw_st.st_size);
 		return 1;
 	}
-	for(int i=1;i<=9;i++) {
-		if((4*i*32*((hdr->total-1)*32*i + hdr->width))==aw_st.st_size-sizeof(struct artwork_header)-hdr->plist_offset) {
+	for(int i=1;i<=64;i++) {
+		if((4*i*32*((hdr->total-1)*32*i + hdr->height))==aw_st.st_size-sizeof(struct artwork_header)-hdr->plist_offset) {
 			artwork_scale=i;
 			break;
 		}
@@ -176,6 +173,7 @@ int unartwork_main(int argc, char *argv[]) {
 		return 1;
 	}
 	int arr_size=plist_array_get_size(plist_data);
+	int ret_err=0;
 	for(int i=0;i<arr_size;i++) {
 		void *current_begin=artwork_file+4*artwork_scale*artwork_scale*32*32*i;
 		plist_t name=plist_array_get_item(plist_data,i);
@@ -210,29 +208,27 @@ int unartwork_main(int argc, char *argv[]) {
 		png_structp png_ptr=png_create_write_struct(PNG_LIBPNG_VER_STRING,NULL,NULL,NULL);
 		if(!png_ptr) {
 			fprintf(stderr,"ERROR: Failed to create write struct for png\n");
+			ret_err=2;
 			goto cleanup;
 		}
 		png_infop info_ptr=png_create_info_struct(png_ptr);
 		if(!info_ptr) {
 			png_destroy_write_struct(&png_ptr,NULL);
 			fprintf(stderr,"ERROR: Failed to create png info ptr\n");
+			ret_err=2;
 			goto cleanup;
 		}
 		FILE *output_file=NULL;
 		png_bytep *png_rows=NULL;
-		if(setjmp(png_jmpbuf(png_ptr))) {
-			png_destroy_write_struct(&png_ptr,NULL);
+		output_file=fopen(fn,"wb");
+		if(!output_file||setjmp(png_jmpbuf(png_ptr))) {
+			png_destroy_write_struct(&png_ptr,&info_ptr);
 			if(png_rows)
 				free(png_rows);
 			if(output_file)
 				fclose(output_file);
 			fprintf(stderr,"ERROR: Failed to write to png\n");
-			goto cleanup;
-		}
-		output_file=fopen(fn,"wb");
-		if(!output_file) {
-			fprintf(stderr,"ERROR: Failed to open output file\n");
-			png_destroy_write_struct(&png_ptr,NULL);
+			ret_err=2;
 			goto cleanup;
 		}
 		png_init_io(png_ptr,output_file);
@@ -250,5 +246,5 @@ int unartwork_main(int argc, char *argv[]) {
 cleanup:
 	plist_free(plist_data);
 	munmap(artwork_file,aw_st.st_size);
-	return 0;
+	return ret_err;
 }

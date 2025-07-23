@@ -1,3 +1,6 @@
 artwork-utils
 *.artwork
 *.swp
+*.png
+*.raw
+
