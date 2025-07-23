@@ -199,8 +199,8 @@ int unartwork_main(int argc, char *argv[]) {
 			}
 		}
 		//printf("%d: %s\n",i,plist_get_string_ptr(name,NULL));
-		char fn[32];
-		sprintf(fn,"%s/%.20s.%s",output_dir,imgn,raw_output?"raw":"png");
+		char fn[PATH_MAX];
+		sprintf(fn,"%s/%.32s.%s",output_dir,imgn,raw_output?"raw":"png");
 		if(raw_output) {
 			FILE *file=fopen(fn,"wb");
 			fwrite(current_begin,1,4*32*artwork_scale*(i==arr_size-1?hdr->width:32*artwork_scale),file);
