@@ -1,0 +1,7 @@
+an utility to manipulate Apple `.artwork` files.
+
+Only extraction implemented rn.
+
+Works with the ones appear on iOS 14, iOS 15, etc. Not compatible with old ones
+
+
