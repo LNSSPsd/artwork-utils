@@ -1,4 +1,5 @@
-
+#ifndef _artwork_h
+#define _artwork_h
 
 struct artwork_header {
 	unsigned int idk1;
@@ -10,5 +11,15 @@ struct artwork_header {
 	unsigned int signature;
 };
 
-extern int unartwork_main(int argc, char *argv[]);
-extern int enartwork_main(int argc, char *argv[]);
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+int unartwork_main(int argc, char *argv[]);
+int enartwork_main(int argc, char *argv[]);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
