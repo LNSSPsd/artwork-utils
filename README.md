@@ -1,4 +1,4 @@
-## artwork-utlis
+## artwork-utils
 
 utilities to manipulate Apple deprecated `.artwork` files.
 
