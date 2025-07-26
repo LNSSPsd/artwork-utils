@@ -2,11 +2,11 @@
 #define _artwork_h
 
 struct artwork_header {
-	unsigned int addtitional_offset; // not implemented in this project yet
+	unsigned int additional_offset; // not implemented in this project yet
 	unsigned int plist_offset;
 	unsigned int width;
 	unsigned int height;
-	unsigned int bitmapInfo;
+	unsigned int colorSpace;
 	unsigned int total;
 	unsigned int signature;
 };
