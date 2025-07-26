@@ -4,7 +4,7 @@
 #include "artwork.h"
 
 void print_help(FILE *f, const char *self) {
-	fprintf(f, "%s unartwork [options...]\n%s enartwork [options...]\n\n\Invoke --help on individual functions to see detailed help text.\n", self, self);
+	fprintf(f, "%s unartwork [options...]\n%s enartwork [options...]\n\nInvoke --help on individual functions to see detailed help text.\n", self, self);
 }
 
 int main(int argc, char *argv[]) {

@@ -20,7 +20,6 @@ void unartwork_print_help(FILE *f, const char *self) {
 		"--raw                   Export raw BGRA data.",
 		"-i, --artwork           Specify artwork file.",
 		"-D, --output-directory  Specify output directory.",
-		"--force-scale           Specify artwork scale, overriding autodetected value.",
 		"-l, --list              Print the contents, do not generate output.",
 		NULL
 	};
@@ -42,7 +41,7 @@ int unartwork_main(int argc, char *argv[]) {
 		static struct option longopts[] = {
 			{ "help",             no_argument,       0, 0  },
 			{ "raw",              no_argument,       0, 0  },
-			{ "force-scale",      required_argument, 0, 0  },
+			//{ "force-scale",      required_argument, 0, 0  },
 			{ "artwork",          required_argument, 0, 'i'},
 			{ "output-directory", required_argument, 0, 'D'},
 			{ "list",             no_argument,       0, 'l'},
@@ -174,17 +173,12 @@ int unartwork_main(int argc, char *argv[]) {
 		munmap(artwork_file, aw_st.st_size);
 		return 1;
 	}
-	for (int i = 1; i <= 64; i++) {
-		if ((4 * i * 32 * ((hdr->total - 1) * 32 * i + hdr->height)) ==
-		    aw_st.st_size - sizeof(struct artwork_header) - hdr->plist_offset) {
-			artwork_scale = i;
-			break;
-		}
-	}
-	if (!list_only && artwork_scale == -1) {
-		fprintf(stderr,
-		    "ERROR: Failed to detect artwork scale, possibly invalid, consider "
-		    "setting --force-scale\n");
+	unsigned int line_length=4*((16+hdr->width-1)&(-16));
+	unsigned int normal_img_length=(line_length*hdr->height +4095)& 0xfffff000;
+	unsigned int total_height=normal_img_length/line_length;
+	if(normal_img_length*(hdr->total-1) + line_length*hdr->height!=
+		aw_st.st_size - sizeof(struct artwork_header) - hdr->plist_offset) {
+		fprintf(stderr, "ERROR: Invalid file length\n");
 		plist_free(plist_data);
 		munmap(artwork_file, aw_st.st_size);
 		return 1;
@@ -193,7 +187,7 @@ int unartwork_main(int argc, char *argv[]) {
 	int ret_err  = 0;
 	for (int i = 0; i < arr_size; i++) {
 		void *current_begin =
-		    artwork_file + 4 * artwork_scale * artwork_scale * 32 * 32 * i;
+		    artwork_file + i*normal_img_length;
 		plist_t name = plist_array_get_item(plist_data, i);
 		if (!name || !PLIST_IS_STRING(name)) {
 			fprintf(stderr, "ERROR: Invalid plist data structure\n");
@@ -252,10 +246,9 @@ int unartwork_main(int argc, char *argv[]) {
 		}
 		png_init_io(png_ptr, output_file);
 		png_set_IHDR(png_ptr, info_ptr, hdr->width, hdr->height, 8, PNG_COLOR_TYPE_RGB_ALPHA, PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
-		;
 		png_rows = malloc(sizeof(png_bytep) * hdr->height);
 		for (int row = 0; row < hdr->height; row++) {
-			png_rows[row] = current_begin + 4 * row * artwork_scale * 32;
+			png_rows[row] = current_begin + row * line_length;
 		}
 		png_set_rows(png_ptr, info_ptr, png_rows);
 		png_write_png(png_ptr, info_ptr, PNG_TRANSFORM_BGR, NULL);

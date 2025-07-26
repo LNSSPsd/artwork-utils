@@ -31,7 +31,7 @@ static void enartwork_print_help(FILE *fp, const char *self_name) {
 
 	const char *options[] = {
 		"--help                   Display this help message.",
-		"-S, --append-scale       Append image scale to file name. (e.g. output@2x.artwork)",
+		//"-S, --append-scale       Append image scale to file name. (e.g. output@2x.artwork)",
 		"-c, --contents-directory Specify the directory containing all input images.",
 		"-o, --output             Specify the output artwork file.",
 		NULL
@@ -53,12 +53,12 @@ int enartwork_main(int argc, char *argv[]) {
 		int                  opt_index;
 		static struct option longopts[] = {
 			{"help",                no_argument,       0, 0  },
-			{ "append-scale",       no_argument,       0, 'S'},
+			//{ "append-scale",       no_argument,       0, 'S'},
 			{ "contents-directory", required_argument, 0, 'c'},
 			{ "output",             required_argument, 0, 'o'},
 			{ 0,			        0,                 0, 0  }
 		};
-		int c = getopt_long(argc, argv, "c:o:S", longopts, &opt_index);
+		int c = getopt_long(argc, argv, "c:o:", longopts, &opt_index);
 		if (c == -1)
 			break;
 		switch (c) {
@@ -158,27 +158,18 @@ int enartwork_main(int argc, char *argv[]) {
 		all_imgs[dind].i = info_ptr;
 		fclose(png_file);
 	}
-	unsigned int longside    = artwork_width > artwork_height ? artwork_width : artwork_height;
-	unsigned int final_scale = 0;
-	for (int scale = 1; scale <= 64; scale++) {
-		if (longside < scale * 32) {
-			final_scale = scale;
-			break;
-		}
-	}
-	if (!final_scale) {
-		fprintf(stderr, "ERROR: Failed to find a suitable scale for image dimension %ux%u. Image too large.\n", artwork_width, artwork_height);
-		goto cleanup;
-	}
+	unsigned int line_length=4*((16+artwork_width-1)&(-16));
+	unsigned int normal_img_length=(line_length*artwork_height +4095)& 0xfffff000;
+	unsigned int total_height=normal_img_length/line_length;
 	static char output_fn[PATH_MAX];
-	if (append_scale) {
+	/*if (append_scale) {
 		char *ext = memmem(output_file, strlen(output_file) + 1, ".artwork", 9);
 		if (ext)
 			*ext = 0;
 		snprintf(output_fn, PATH_MAX, "%s@%ux.artwork", output_file, final_scale);
-	} else {
+	} else {*/
 		strncpy(output_fn, output_file, PATH_MAX);
-	}
+	//}
 	int output_fd = open(output_fn, O_CREAT | O_WRONLY | O_TRUNC, 0644);
 	if (output_fd == -1) {
 		perror("Failed to open output artwork file for writing");
@@ -189,18 +180,18 @@ int enartwork_main(int argc, char *argv[]) {
 		unsigned int cur_width, cur_height;
 		png_get_IHDR(all_imgs[i].s, all_imgs[i].i, &cur_width, &cur_height, NULL, NULL, NULL, NULL, NULL);
 		png_bytep *cur = png_get_rows(all_imgs[i].s, all_imgs[i].i);
-		for (int row = 0; row < final_scale * 32; row++) {
+		for (int row = 0; row < total_height; row++) {
 			if (row >= artwork_height) {
 				if (i == img_cnt - 1)
 					break;
-				for (int ext = 0; ext < final_scale * 32; ext++) {
+				for (int ext = 0; ext < line_length; ext+=4) {
 					unsigned int val = 0;
 					write(output_fd, &val, 4);
 				}
 				continue;
 			}
 			write(output_fd, cur[row], artwork_width * 4);
-			for (int ext = artwork_width; ext < final_scale * 32; ext++) {
+			for (int ext = artwork_width*4; ext < line_length; ext+=4) {
 				unsigned int val = 0;
 				write(output_fd, &val, 4);
 			}
