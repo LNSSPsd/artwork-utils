@@ -144,7 +144,7 @@ int enartwork_main(int argc, char *argv[]) {
 			goto cleanup;
 		}
 		png_init_io(cur_png_r, png_file);
-		png_read_png(cur_png_r, info_ptr, PNG_TRANSFORM_BGR | PNG_TRANSFORM_SCALE_16, NULL);
+		png_read_png(cur_png_r, info_ptr, PNG_TRANSFORM_BGR, NULL);
 		unsigned int cur_width, cur_height;
 		png_get_IHDR(cur_png_r, info_ptr, &cur_width, &cur_height, NULL, NULL, NULL, NULL, NULL);
 		if (artwork_width < cur_width) {
