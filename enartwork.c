@@ -44,7 +44,7 @@ static void enartwork_print_help(FILE *fp, const char *self_name) {
 
 int enartwork_main(int argc, char *argv[]) {
 	argc--;
-	int ret = EXIT_FAILURE;
+	int         ret          = EXIT_FAILURE;
 	const char *self_name    = *(argv++);
 	const char *contents_dir = NULL;
 	char       *output_file  = NULL;
@@ -53,7 +53,7 @@ int enartwork_main(int argc, char *argv[]) {
 		int                  opt_index;
 		static struct option longopts[] = {
 			{"help",                no_argument,       0, 0  },
-			//{ "append-scale",       no_argument,       0, 'S'},
+ //{ "append-scale",       no_argument,       0, 'S'},
 			{ "contents-directory", required_argument, 0, 'c'},
 			{ "output",             required_argument, 0, 'o'},
 			{ 0,			        0,                 0, 0  }
@@ -146,7 +146,41 @@ int enartwork_main(int argc, char *argv[]) {
 		png_init_io(cur_png_r, png_file);
 		png_read_png(cur_png_r, info_ptr, PNG_TRANSFORM_BGR, NULL);
 		unsigned int cur_width, cur_height;
-		png_get_IHDR(cur_png_r, info_ptr, &cur_width, &cur_height, NULL, NULL, NULL, NULL, NULL);
+		int          bit_depth, color_type;
+		png_get_IHDR(cur_png_r, info_ptr, &cur_width, &cur_height, &bit_depth, &color_type, NULL, NULL, NULL);
+
+		png_size_t rowbytes = png_get_rowbytes(cur_png_r, info_ptr);
+		int        channels = png_get_channels(cur_png_r, info_ptr);
+
+		/* quick sanity checks */
+		if (bit_depth != 8) {
+			fprintf(stderr, "WARNING: expected 8-bit image after transforms, got %d-bit\n", bit_depth);
+		}
+
+		/* Only premultiply when we have 4 channels (BGRA due to PNG_TRANSFORM_BGR) */
+		if (channels == 4) {
+			png_bytep *rows = png_get_rows(cur_png_r, info_ptr);
+			for (unsigned int y = 0; y < cur_height; ++y) {
+				png_bytep row = rows[y];
+				/* each pixel is 4 bytes: B,G,R,A */
+				for (unsigned int x = 0; x < cur_width; ++x) {
+					png_bytep    px = row + x * 4;
+					unsigned int a  = px[3]; /* alpha 0..255 */
+					if (a == 255)
+						continue; /* no change needed */
+					/* premultiply channels: round((C * A) / 255) */
+					px[0] = (png_byte)((px[0] * a + 127) / 255); /* B */
+					px[1] = (png_byte)((px[1] * a + 127) / 255); /* G */
+					px[2] = (png_byte)((px[2] * a + 127) / 255); /* R */
+					/* alpha remains px[3] */
+				}
+			}
+		} else {
+			/* If channels != 4 we can't premultiply in-place safely here.
+			   Best practice: normalize earlier using png_set_filler(..., 0xFF, PNG_FILLER_AFTER)
+			   or use png_set_expand() so you always get 4 channels. For now issue a warning. */
+			fprintf(stderr, "WARNING: PNG has %d channels (expected 4 BGRA). Skipping premultiplication for this image (%s).\n", channels, png_fn);
+		}
 		if (artwork_width < cur_width) {
 			artwork_width = cur_width;
 		}
@@ -158,17 +192,17 @@ int enartwork_main(int argc, char *argv[]) {
 		all_imgs[dind].i = info_ptr;
 		fclose(png_file);
 	}
-	unsigned int line_length=4*((16+artwork_width-1)&(-16));
-	unsigned int normal_img_length=(line_length*artwork_height +4095)& 0xfffff000;
-	unsigned int total_height=normal_img_length/line_length;
-	static char output_fn[PATH_MAX];
+	unsigned int line_length       = 4 * ((16 + artwork_width - 1) & (-16));
+	unsigned int normal_img_length = (line_length * artwork_height + 4095) & 0xfffff000;
+	unsigned int total_height      = normal_img_length / line_length;
+	static char  output_fn[PATH_MAX];
 	/*if (append_scale) {
-		char *ext = memmem(output_file, strlen(output_file) + 1, ".artwork", 9);
-		if (ext)
-			*ext = 0;
-		snprintf(output_fn, PATH_MAX, "%s@%ux.artwork", output_file, final_scale);
+	    char *ext = memmem(output_file, strlen(output_file) + 1, ".artwork", 9);
+	    if (ext)
+	        *ext = 0;
+	    snprintf(output_fn, PATH_MAX, "%s@%ux.artwork", output_file, final_scale);
 	} else {*/
-		strncpy(output_fn, output_file, PATH_MAX);
+	strncpy(output_fn, output_file, PATH_MAX);
 	//}
 	int output_fd = open(output_fn, O_CREAT | O_WRONLY | O_TRUNC, 0644);
 	if (output_fd == -1) {
@@ -184,14 +218,14 @@ int enartwork_main(int argc, char *argv[]) {
 			if (row >= artwork_height) {
 				if (i == img_cnt - 1)
 					break;
-				for (int ext = 0; ext < line_length; ext+=4) {
+				for (int ext = 0; ext < line_length; ext += 4) {
 					unsigned int val = 0;
 					write(output_fd, &val, 4);
 				}
 				continue;
 			}
 			write(output_fd, cur[row], artwork_width * 4);
-			for (int ext = artwork_width*4; ext < line_length; ext+=4) {
+			for (int ext = artwork_width * 4; ext < line_length; ext += 4) {
 				unsigned int val = 0;
 				write(output_fd, &val, 4);
 			}
